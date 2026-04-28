@@ -6,11 +6,12 @@ from uuid import uuid4
 
 import cv2
 import numpy as np
-import torch
-import onnxruntime
+from insightface.model_zoo.scrfd import SCRFD
+from insightface.model_zoo.arcface_onnx import ArcFaceONNX
+from insightface.utils import face_align as insightface_face_align
 from lib.schemas import EmbeddingRecord, FaceDetection, PredictResult, AlignedFace
 from lib.storage.base import EmbeddingStoreProtocol
-import os 
+import os
 import logging
 
 logger = logging.getLogger(__name__)
@@ -30,8 +31,13 @@ class FaceService:
         self.similarity_metric = similarity_metric
         self.similarity_threshold = similarity_threshold
         self.face_size = face_size
-        self.model: any = self._load_model(model_path)
         self.output_path = output_path
+        # keypoints guardados en detect_faces para usarlos en align_face
+        self._kps_cache: dict[tuple, np.ndarray] = {}
+
+        mp = Path(model_path)
+        self.rec_model = self._load_rec_model(mp)
+        self.det_model = self._load_det_model(mp.parent)
 
         os.makedirs(self.output_path, exist_ok=True)
 
@@ -59,16 +65,36 @@ class FaceService:
         }
 
 
-    def _load_model(self, model_path: Path) -> any:
-        mp = Path(model_path)
-        if not mp.exists():
-            raise ValueError(f"Model path does not exist: {model_path}")
-        suf = mp.suffix.lower()
-        if suf == ".pth":
-            return torch.load(mp, map_location="cpu", weights_only=False)
-        if suf == ".onnx":
-            return onnxruntime.InferenceSession(str(mp))
-        raise ValueError(f"Unsupported model format (expected .pth or .onnx): {model_path}")
+    def _load_rec_model(self, model_path: Path) -> ArcFaceONNX:
+        if not model_path.exists():
+            raise ValueError(f"Modelo de reconocimiento no encontrado: {model_path}")
+        rec = ArcFaceONNX(model_file=str(model_path))
+        rec.prepare(ctx_id=-1)
+        logger.info(f"Modelo ArcFace cargado: {model_path}")
+        return rec
+
+    def _load_det_model(self, model_dir: Path) -> SCRFD:
+        # Buscar por nombres conocidos del pack buffalo_l de InsightFace
+        candidates = ["det_10g.onnx", "scrfd_10g_bnkps.onnx", "scrfd_500m_bnkps.onnx"]
+        for name in candidates:
+            p = model_dir / name
+            if p.exists():
+                det = SCRFD(model_file=str(p))
+                det.prepare(ctx_id=-1, input_size=(640, 640))
+                logger.info(f"Modelo SCRFD cargado: {p}")
+                return det
+        # Fallback: cualquier det_*.onnx o scrfd*.onnx en el directorio
+        for f in sorted(model_dir.iterdir()):
+            if f.suffix.lower() == ".onnx" and (
+                "scrfd" in f.name.lower() or f.name.lower().startswith("det_")
+            ):
+                det = SCRFD(model_file=str(f))
+                det.prepare(ctx_id=-1, input_size=(640, 640))
+                logger.info(f"Modelo SCRFD cargado: {f}")
+                return det
+        raise ValueError(
+            f"No se encontró modelo de detección (det_10g.onnx / scrfd*.onnx) en: {model_dir}"
+        )
 
     def _load_image(self, source_path: str) -> np.ndarray:
         image = cv2.imread(source_path)
@@ -82,8 +108,18 @@ class FaceService:
         Each box is (x1, y1, x2, y2) in pixels (InsightFace convention).
         Return a list of tuples with the coordinates of the faces detected in the image.
         """
-        raise NotImplementedError("Not implemented")
-
+        bboxes, kpss = self.det_model.detect(image, max_num=0, metric="default")
+        h, w = image.shape[:2]
+        self._kps_cache.clear()
+        boxes: list[tuple[int, int, int, int]] = []
+        for i, bbox in enumerate(bboxes):
+            x1, y1, x2, y2 = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
+            x1, y1, x2, y2 = self._clip_xyxy(x1, y1, x2, y2, h, w)
+            box = (x1, y1, x2, y2)
+            boxes.append(box)
+            if kpss is not None and i < len(kpss):
+                self._kps_cache[box] = kpss[i]
+        return boxes
 
     def align_face(
         self, image: np.ndarray, box: tuple[int, int, int, int]
@@ -92,14 +128,33 @@ class FaceService:
         Crop using box (x1, y1, x2, y2) and run FaceAnalysis on the crop.
         Return an AlignedFace object.
         """
-        raise NotImplementedError("Not implemented")
+        kps = self._kps_cache.get(box)
+        if kps is not None:
+            aligned_img = insightface_face_align.norm_crop(
+                image, landmark=kps, image_size=self.face_size
+            )
+        else:
+            # Fallback sin keypoints: recorte simple
+            x1, y1, x2, y2 = box
+            crop = image[y1:y2, x1:x2]
+            aligned_img = cv2.resize(crop, (self.face_size, self.face_size))
+        return AlignedFace(
+            bbox=list(box),
+            keypoints=kps.tolist() if kps is not None else None,
+            image=aligned_img,
+        )
 
     def extract_embedding_from_face(self, face: AlignedFace) -> list[float]:
         """
         Extract embedding from face.
         Return a list of floats representing the embedding of the face.
         """
-        raise NotImplementedError("Not implemented")
+        feat = self.rec_model.get_feat([face.image])  # (1, 512)
+        emb = feat.flatten().astype(np.float32)
+        norm = np.linalg.norm(emb)
+        if norm > 0:
+            emb = emb / norm
+        return emb.tolist()
         
     def _cosine(self, a: np.ndarray, b: np.ndarray) -> float:
         denom = np.linalg.norm(a) * np.linalg.norm(b)
