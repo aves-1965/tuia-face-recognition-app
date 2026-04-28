@@ -46,29 +46,29 @@ tp1/
 ```
 
 # Preparando el ambiente local
+
 ## Requisitios para trabajar de forma local
- - Python 3.12
- - Docker
+
+- Python 3.12
+- Docker
 
 ## Configura tu modelo
 
-<p>
-Entrena tu modelo y guardalo dentro de la carpeta models.
-Por defecto, el modulo soporta modelos construidos con pytorch validando la extension <b>.pth</b>. 
+Entrena tu modelo y guardalo dentro de la carpeta models. Por defecto, el modulo soporta modelos construidos con pytorch validando la extension **.pth**.
 
-Si eligen utilizar otro framework, pueden exportarlo a formato <b>.onnx</b>
+Si eligen utilizar otro framework, pueden exportarlo a formato **.onnx**
 
 Recuerda actulizar las configuraciones del .env correspondiente para actualizar la ruta hacia tu modelo.
-</p>
+
+El entorno local con o sin docker reinicia la aplicacion y actualiza el codigo automaticamente si uitlizan docker compose. 
+
+Puede que el reinicio automatico no funcione en todas las versiones de Docker Desktop en sistemas *Windows*, en tal caso deberan correr los comandos como se mencionan en el siguiente apartado para actualizar el codigo dentro de docker.
 
 ## Opcion 1 - Corriendo dentro de docker
 
 ### 1. Buildea y corre la aplicacion.
 
-<p>
-Actualiza el archivo <b>.env.docker.example</b> y ajustalo a tus necesidades.
-Luego corre desde el terminal :
-</p>
+Actualiza el archivo **.env.docker.example** y ajustalo a tus necesidades. Luego corre desde el terminal :
 
 ```bash
 docker compose build
@@ -80,11 +80,13 @@ docker compose up -d
 ### 1. Install uv
 
 Para usuarios de Linux o Mac:
+
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
 Para usuarios de Windows :
+
 ```bash
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
@@ -98,32 +100,38 @@ uv venv --python 3.12 .venv
 ```
 
 ### 3. Activa el virtual environment
+
 ```bash
 source .venv/bin/activate
 ```
 
 ### 4. Instala las dependencias.
+
 ```bash
 uv pip install -r requirements.txt
 ```
 
 ### 5. Inicia la base de datos
+
 ```bash
 docker compose up postgres -d
 ```
 
 ### 6. Incia el frontend
+
 ```bash
 cd src
 uvicorn frontend.app:app --port 8080
 ```
 
 ### 7. Inicia el backend
+
 Asegurate de configurar el archivo *.env.local.example* para que se adapte a tus necesidades.
 
 ```bash
+cp ../models/<YOUR MODEL NAME>.pth models
 cp ../.env.local.example src/.env
-uvicorn app.main:app --port 8000 
+uvicorn app.main:app --reload --port 8000 
 ```
 
 ## Configuracion
