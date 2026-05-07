@@ -68,8 +68,8 @@ def _keypoints_crop_to_full(
             continue
         if not isinstance(val, (list, tuple)) or len(val) < 2:
             continue
-        px = int(round(float(val[0]))) + x1
-        py = int(round(float(val[1]))) + y1
+        px = int(round(float(val[0])))
+        py = int(round(float(val[1])))
         out[idx] = (px, py)
     return out
 
