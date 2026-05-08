@@ -1,0 +1,27 @@
+* 6588434 (origin/funciones) Agrego evaluación final en conjunto de test
+* 2851617 fine tunning del modelo
+* f7c298a (HEAD -> funciones) Dataset propio
+* 3bfd258 Modifico funciones de train, puede que algun comentario deba modificarse
+| * 356ca8a (origin/main, origin/HEAD, main) Merge pull request #2 from aves-1965/feature/fix-keypoints
+|/| 
+| * 2f0685d fix: corregir desplazamiento de keypoints en gradio_ui (eliminar suma de offset del bbox)
+|/  
+*   0ed7506 Merge pull request #1 from aves-1965/feature/comienzo
+|\  
+| * 820a8f1 Paso 1: a:Chau Postgres! b:métodos para face_service iniciales c:Jupiter train con el reporte hasta acá
+|/  
+*   9a5a187 Merge branch 'EzequielMatiasArevalo:main' into main
+|\  
+| * 0e438b7 Update README with Docker Windows notes
+| * c5620f6 Actualizando el README.md
+| | *   92d5795 (refs/stash) WIP on main: 18d1f9a Agregado del enunciado del TP1
+| |/|\  
+|/| | | 
+| | | * 9cd7aae untracked files on main: 18d1f9a Agregado del enunciado del TP1
+| | * 6070c41 index on main: 18d1f9a Agregado del enunciado del TP1
+| |/  
+|/|   
+* | 18d1f9a Agregado del enunciado del TP1
+|/  
+* 210c245 TP 1
+* c11796c first commit
